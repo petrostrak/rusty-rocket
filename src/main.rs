@@ -1,5 +1,7 @@
 use base64::{engine::general_purpose, Engine};
 use rocket::{
+    http::Status,
+    request::{FromRequest, Outcome, Request},
     response::status,
     serde::json::{json, Value},
 };
@@ -40,8 +42,24 @@ impl BasicAuth {
     }
 }
 
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for BasicAuth {
+    type Error = ();
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let auth_header = request.headers().get_one("Authorization");
+        if let Some(auth_header) = auth_header {
+            if let Some(auth) = Self::from_authorization_header(auth_header) {
+                return Outcome::Success(auth);
+            }
+        }
+        Outcome::Failure((Status::Unauthorized, ()))
+    }
+}
+
+// curl http://127.0.0.1:8000/rustaceans -H 'Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=='
 #[get("/rustaceans")]
-fn get_rustaceans() -> Value {
+fn get_rustaceans(_auth: BasicAuth) -> Value {
     json!([{"id": 1, "name": "John Doe" }, {"id": 2, "name": "Doe John" }])
 }
 
@@ -70,7 +88,7 @@ fn not_found() -> Value {
     json!("Not found!")
 }
 
-#[catch(404)]
+#[catch(401)]
 fn unauthorized() -> Value {
     json!("Unauthorized!")
 }
