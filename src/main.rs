@@ -1,31 +1,38 @@
+#[macro_use]
+extern crate rocket;
+extern crate diesel;
+#[macro_use]
+extern crate rocket_sync_db_pools;
+
 use rocket::{
     response::status,
     serde::json::{json, Value},
 };
 
-#[macro_use]
-extern crate rocket;
 mod auth;
 use auth::BasicAuth;
 
+#[database("sqlite")]
+struct DB(diesel::SqliteConnection);
+
 // curl http://127.0.0.1:8000/rustaceans -H 'Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=='
 #[get("/rustaceans")]
-fn get_rustaceans(_auth: BasicAuth) -> Value {
+fn get_rustaceans(_auth: BasicAuth, _db: DB) -> Value {
     json!([{"id": 1, "name": "John Doe" }, {"id": 2, "name": "Doe John" }])
 }
 
 #[get("/rustaceans/<id>")]
-fn view_rustacean(id: i32, _auth: BasicAuth) -> Value {
+fn view_rustacean(id: i32, _auth: BasicAuth, _db: DB) -> Value {
     json!({"id": id, "name": "John Doe", "email": "john@doe.com"})
 }
 
 #[post("/rustaceans", format = "json")]
-fn create_rustacean(_auth: BasicAuth) -> Value {
+fn create_rustacean(_auth: BasicAuth, _db: DB) -> Value {
     json!({"id": 3, "name": "John Doe", "email": "john@doe.com"})
 }
 
 #[put("/rustaceans/<id>", format = "json")]
-fn update_rustacean(id: i32, _auth: BasicAuth) -> Value {
+fn update_rustacean(id: i32, _auth: BasicAuth, _db: DB) -> Value {
     json!({"id": id, "name": "John Doe", "email": "john@doe.com"})
 }
 
@@ -58,6 +65,7 @@ async fn main() {
             ],
         )
         .register("/", catchers![not_found, unauthorized])
+        .attach(DB::fairing())
         .launch()
         .await;
 }
