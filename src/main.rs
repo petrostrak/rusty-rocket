@@ -6,10 +6,10 @@ extern crate diesel;
 extern crate rocket_sync_db_pools;
 
 use diesel::prelude::*;
-use models::Rustacean;
+use models::{NewRustacean, Rustacean};
 use rocket::{
     response::status,
-    serde::json::{json, Value},
+    serde::json::{json, Json, Value},
 };
 use schema::rustaceans;
 
@@ -40,9 +40,16 @@ fn view_rustacean(id: i32, _auth: BasicAuth, _db: DB) -> Value {
     json!({"id": id, "name": "John Doe", "email": "john@doe.com"})
 }
 
-#[post("/rustaceans", format = "json")]
-fn create_rustacean(_auth: BasicAuth, _db: DB) -> Value {
-    json!({"id": 3, "name": "John Doe", "email": "john@doe.com"})
+#[post("/rustaceans", format = "json", data = "<new_rustacean>")]
+async fn create_rustacean(_auth: BasicAuth, db: DB, new_rustacean: Json<NewRustacean>) -> Value {
+    db.run(|c| {
+        let result = diesel::insert_into(rustaceans::table)
+            .values(new_rustacean.into_inner())
+            .execute(c)
+            .expect("Failed to create new rustacean");
+        json!(result)
+    })
+    .await
 }
 
 #[put("/rustaceans/<id>", format = "json")]
@@ -65,6 +72,11 @@ fn unauthorized() -> Value {
     json!("Unauthorized!")
 }
 
+#[catch(422)]
+fn unprocessable_entity() -> Value {
+    json!("Unprocessable Entity: One or more fields are missing!")
+}
+
 #[rocket::main]
 async fn main() {
     let _ = rocket::build()
@@ -78,7 +90,10 @@ async fn main() {
                 delete_rustacean
             ],
         )
-        .register("/", catchers![not_found, unauthorized])
+        .register(
+            "/",
+            catchers![not_found, unauthorized, unprocessable_entity],
+        )
         .attach(DB::fairing())
         .launch()
         .await;
