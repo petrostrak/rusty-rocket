@@ -36,8 +36,15 @@ async fn get_rustaceans(_auth: BasicAuth, db: DB) -> Value {
 }
 
 #[get("/rustaceans/<id>")]
-fn view_rustacean(id: i32, _auth: BasicAuth, _db: DB) -> Value {
-    json!({"id": id, "name": "John Doe", "email": "john@doe.com"})
+async fn view_rustacean(id: i32, _auth: BasicAuth, db: DB) -> Value {
+    db.run(move |c| {
+        let rustacean = rustaceans::table
+            .find(id)
+            .get_result::<Rustacean>(c)
+            .expect("Failed to retrieve rustacean");
+        json!(rustacean)
+    })
+    .await
 }
 
 #[post("/rustaceans", format = "json", data = "<new_rustacean>")]
@@ -77,6 +84,11 @@ fn unprocessable_entity() -> Value {
     json!("Unprocessable Entity: One or more fields are missing!")
 }
 
+#[catch(500)]
+fn internal_server_error() -> Value {
+    json!("Internal Server Error!")
+}
+
 #[rocket::main]
 async fn main() {
     let _ = rocket::build()
@@ -92,7 +104,12 @@ async fn main() {
         )
         .register(
             "/",
-            catchers![not_found, unauthorized, unprocessable_entity],
+            catchers![
+                not_found,
+                unauthorized,
+                unprocessable_entity,
+                internal_server_error
+            ],
         )
         .attach(DB::fairing())
         .launch()
