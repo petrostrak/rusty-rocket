@@ -59,14 +59,30 @@ async fn create_rustacean(_auth: BasicAuth, db: DB, new_rustacean: Json<NewRusta
     .await
 }
 
-#[put("/rustaceans/<id>", format = "json")]
-fn update_rustacean(id: i32, _auth: BasicAuth, _db: DB) -> Value {
-    json!({"id": id, "name": "John Doe", "email": "john@doe.com"})
+#[put("/rustaceans/<id>", format = "json", data = "<rustacean>")]
+async fn update_rustacean(id: i32, _auth: BasicAuth, db: DB, rustacean: Json<Rustacean>) -> Value {
+    db.run(move |c| {
+        let result = diesel::update(rustaceans::table.find(id))
+            .set((
+                rustaceans::name.eq(rustacean.name.to_owned()),
+                rustaceans::email.eq(rustacean.email.to_owned()),
+            ))
+            .execute(c)
+            .expect("Failed to update rustacean");
+        json!(result)
+    })
+    .await
 }
 
 #[delete("/rustaceans/<id>")]
-fn delete_rustacean(id: i32, _auth: BasicAuth) -> status::NoContent {
-    status::NoContent
+async fn delete_rustacean(id: i32, _auth: BasicAuth, db: DB) -> status::NoContent {
+    db.run(move |c| {
+        diesel::delete(rustaceans::table.find(id))
+            .execute(c)
+            .expect("Failed to delete rustacean");
+        status::NoContent
+    })
+    .await
 }
 
 #[catch(404)]
